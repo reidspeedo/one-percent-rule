@@ -3,14 +3,10 @@ import requests
 from pyzillow.pyzillow import ZillowWrapper, GetDeepSearchResults
 import json
 import os
+import logging
 
+logging.basicConfig(filename='app.log', filemode='w', format='%(levelname)s - %(message)s')
 zillow_data = ZillowWrapper(os.environ['ZILLOW_API_KEY'])
-
-def clean(text):
-    if text:
-        return ''.join(''.join(text).split())
-    return None
-
 
 def get_headers():
     # Creating headers.
@@ -25,7 +21,6 @@ def get_headers():
 
 def create_url(zipcode, filter):
     # Creating Zillow URL based on the filter.
-
     if filter == "newest":
         url = "https://www.zillow.com/homes/for_sale/{0}/0_singlestory/days_sort".format(zipcode)
     elif filter == "cheapest":
@@ -35,10 +30,8 @@ def create_url(zipcode, filter):
     print(url)
     return url
 
-
 def save_to_file(response):
     # saving response to `response.html`
-
     with open("response.html", 'w') as fp:
         fp.write(response.text)
 
@@ -57,46 +50,48 @@ def get_response(url):
             return response
     return None
 
-def parse(zipcode, filter=None):
+def get_listings_for_zip(zipcode, filter='newest', limit=5):
     url = create_url(zipcode, filter)
     response = get_response(url)
-
     if not response:
-        print("Failed to fetch the page, please check `response.html` to see the response received from zillow.com.")
+        logging.error("Failed to fetch the page, please check `response.html` to see the response received from zillow.com.")
         return None
-
     parser = html.fromstring(response.text)
-    search_results = parser.xpath("//div[@id='grid-search-results']//script[1]//text()")[0]
-    list_price = str(parser.xpath("//div[@id='grid-search-results']//article//div[@class='list-card-price']/text()")[0])
+    search_results = parser.xpath("//div[@id='grid-search-results']//script[1]//text()")
+    list_prices = parser.xpath("//div[@id='grid-search-results']//article//div[@class='list-card-price']/text()")
+    list_card_types = parser.xpath("//div[@id='grid-search-results']//article//div[@class='list-card-type']/text()")
+    properties_list = []
 
-    json_data = json.loads(search_results)
-    full_address_dict = json_data['address']
-    streetAddress = full_address_dict['streetAddress']
-    postalCode = full_address_dict['postalCode']
+    for key, items in enumerate(search_results):
+        json_data = json.loads(items)
+        full_address_dict = json_data['address']
+        streetAddress = full_address_dict['streetAddress']
+        postalCode = full_address_dict['postalCode']
+        address_string = f'Address: {streetAddress}, {postalCode}'
 
-    deep_search_response = zillow_data.get_deep_search_results(streetAddress, postalCode, True)
-    api_result = GetDeepSearchResults(deep_search_response)
+        try:
+            if list_card_types[key] != 'New Construction':
+                deep_search_response = zillow_data.get_deep_search_results(streetAddress, postalCode, True)
+                api_result = GetDeepSearchResults(deep_search_response)
+                rentzestimate_amount = api_result.rentzestimate_amount
+                list_price = str(list_prices[key])
 
+                properties = {'address': streetAddress,
+                              'postal_code': postalCode,
+                              'price': list_price,
+                              'rent_estimate': rentzestimate_amount}
 
-    rentzestimate_amount = api_result.rentzestimate_amount
+                properties_list.append(properties)
+                print(properties)
+            elif list_card_types[key] == 'New Construction':
+                logging.warning(f'Address: {address_string} / Ignoring New Construction')
+        except Exception as e:
+            logging.error(f'{address_string} / {e}')
 
-
-    string = f'Address: {streetAddress}, {postalCode} \nList Price: {list_price} \nRent Estimate: {rentzestimate_amount}'
-    print(string)
-
-    #     properties = {'address': address,
-    #                   'city': city,
-    #                   'state': state,
-    #                   'postal_code': postal_code,
-    #                   'price': price,
-    #                   'facts and features': 'info',
-    #                   'real estate provider': broker,
-    #                   'url': property_url,
-    #                   'title': title}
-    #     if is_forsale:
-    #         properties_list.append(properties)
-    # return properties_list
+        if key == limit:
+            break
+    return properties_list
 
 
 if __name__ == "__main__":
-    scraped_data = parse('45140', 'newest')
+    scraped_data = get_listings_for_zip('45140', limit=5)
