@@ -30,7 +30,7 @@ def create_url(zipcode, filter):
     print(url)
     return url
 
-def save_to_file(response):
+def save_to_response_file(response):
     # saving response to `response.html`
     with open("response.html", 'w') as fp:
         fp.write(response.text)
@@ -43,10 +43,10 @@ def get_response(url):
         print("status code received:", response.status_code)
         if response.status_code != 200:
             # saving response to file for debugging purpose.
-            save_to_file(response)
+            save_to_response_file(response)
             continue
         else:
-            save_to_file(response)
+            save_to_response_file(response)
             return response
     return None
 
@@ -69,8 +69,9 @@ def get_listings_for_zip(zipcode, filter='newest', limit=5):
         postalCode = full_address_dict['postalCode']
         address_string = f'Address: {streetAddress}, {postalCode}'
 
+        exlude = ['New Construction', 'Lot / Land for sale']
         try:
-            if list_card_types[key] != 'New Construction':
+            if list_card_types[key] not in exlude:
                 deep_search_response = zillow_data.get_deep_search_results(streetAddress, postalCode, True)
                 api_result = GetDeepSearchResults(deep_search_response)
                 rentzestimate_amount = api_result.rentzestimate_amount
@@ -82,7 +83,7 @@ def get_listings_for_zip(zipcode, filter='newest', limit=5):
                               'rent_estimate': rentzestimate_amount}
 
                 properties_list.append(properties)
-                print(properties)
+                #print(properties)
             elif list_card_types[key] == 'New Construction':
                 logging.warning(f'Address: {address_string} / Ignoring New Construction')
         except Exception as e:
@@ -92,6 +93,27 @@ def get_listings_for_zip(zipcode, filter='newest', limit=5):
             break
     return properties_list
 
+def one_percent_rule(full_properties_list):
+    for prop in full_properties_list:
+        one_percent_rule_dict = {}
+
+        try:
+            percentage = 100*float(prop['rent_estimate'])/float(prop['price'].replace('$', '').replace(',', ''))
+            one_percent_rule_dict['percent'] = percentage
+            if percentage >= 1:
+                one_percent_rule_dict['satisfy_one_percent'] = True
+            else:
+                one_percent_rule_dict['satisfy_one_percent'] = False
+        except Exception as e:
+            one_percent_rule_dict['percent'] = percentage
+            one_percent_rule_dict['satisfy_one_percent'] = False
+
+        prop['one_percent_rule'] = one_percent_rule_dict
+
+    return full_properties_list
 
 if __name__ == "__main__":
-    scraped_data = get_listings_for_zip('45140', limit=5)
+    scraped_data = get_listings_for_zip('45140', limit=None)
+    print(one_percent_rule(scraped_data))
+    # for item in full_properties_list:
+    #     print(str(item) + '\n')
