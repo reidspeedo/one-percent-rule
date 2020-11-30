@@ -2,8 +2,9 @@ from lxml import html
 import requests
 from pyzillow.pyzillow import ZillowWrapper, GetDeepSearchResults
 import json
+import os
 
-zillow_data = ZillowWrapper('X1-ZWz17kc5du95aj_61q4u')
+zillow_data = ZillowWrapper(os.environ['ZILLOW_API_KEY'])
 
 def clean(text):
     if text:
