@@ -4,6 +4,7 @@ from pyzillow.pyzillow import ZillowWrapper, GetDeepSearchResults
 import json
 import os
 import logging
+from zip_list import zip_list
 
 logging.basicConfig(filename='app.log', filemode='w', format='%(levelname)s - %(message)s')
 zillow_data = ZillowWrapper(os.environ['ZILLOW_API_KEY'])
@@ -19,15 +20,14 @@ def get_headers():
     return headers
 
 
-def create_url(zipcode, filter):
-    # Creating Zillow URL based on the filter.
-    if filter == "newest":
-        url = "https://www.zillow.com/homes/for_sale/{0}/0_singlestory/days_sort".format(zipcode)
-    elif filter == "cheapest":
-        url = "https://www.zillow.com/homes/for_sale/{0}/0_singlestory/pricea_sort/".format(zipcode)
-    else:
-        url = "https://www.zillow.com/homes/for_sale/{0}_rb/?fromHomePage=true&shouldFireSellPageImplicitClaimGA=false&fromHomePageTab=buy".format(zipcode)
-    print(url)
+def create_url(zipcode):
+    for item in zip_list:
+        if item[0] == zipcode:
+            city_url = item[1].lower()
+            state_url = item[2].lower()
+        else:
+            continue
+    url = f'https://www.zillow.com/{city_url}-{state_url}-{zipcode}/?searchQueryState=%7B%22pagination%22%3A%7B%7D%2C%22mapBounds%22%3A%7B%22west%22%3A-72.1198548988988%2C%22east%22%3A-72.03041932150622%2C%22south%22%3A42.57401567418149%2C%22north%22%3A42.622602193357395%7D%2C%22regionSelection%22%3A%5B%7B%22regionId%22%3A58364%2C%22regionType%22%3A7%7D%5D%2C%22isMapVisible%22%3Atrue%2C%22filterState%22%3A%7B%22doz%22%3A%7B%22value%22%3A%227%22%7D%2C%22nc%22%3A%7B%22value%22%3Afalse%7D%2C%22fore%22%3A%7B%22value%22%3Afalse%7D%2C%22cmsn%22%3A%7B%22value%22%3Afalse%7D%2C%22auc%22%3A%7B%22value%22%3Afalse%7D%2C%22pmf%22%3A%7B%22value%22%3Afalse%7D%2C%22pf%22%3A%7B%22value%22%3Afalse%7D%2C%22ah%22%3A%7B%22value%22%3Atrue%7D%7D%2C%22isListVisible%22%3Atrue%2C%22mapZoom%22%3A14%7D'
     return url
 
 def save_to_response_file(response):
@@ -51,7 +51,8 @@ def get_response(url):
     return None
 
 def get_listings_for_zip(zipcode, filter='newest', limit=5):
-    url = create_url(zipcode, filter)
+    url = create_url(zipcode)
+
     response = get_response(url)
     if not response:
         logging.error("Failed to fetch the page, please check `response.html` to see the response received from zillow.com.")
@@ -105,7 +106,7 @@ def one_percent_rule(full_properties_list):
             else:
                 one_percent_rule_dict['satisfy_one_percent'] = False
         except Exception as e:
-            one_percent_rule_dict['percent'] = percentage
+            one_percent_rule_dict['percent'] = 0
             one_percent_rule_dict['satisfy_one_percent'] = False
 
         prop['one_percent_rule'] = one_percent_rule_dict
@@ -113,7 +114,7 @@ def one_percent_rule(full_properties_list):
     return full_properties_list
 
 if __name__ == "__main__":
-    scraped_data = get_listings_for_zip('45140', limit=None)
-    print(one_percent_rule(scraped_data))
-    # for item in full_properties_list:
-    #     print(str(item) + '\n')
+    scrapedata = get_listings_for_zip('45140')
+    satisfied_props = one_percent_rule(scrapedata)
+
+    print(str(satisfied_props))
