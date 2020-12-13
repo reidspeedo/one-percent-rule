@@ -56,7 +56,7 @@ def get_response(url):
     return None
 
 def get_listings_for_zip(zipcode, filter='newest', limit=10):
-    url = create_url(str(zipcode))
+    url = create_url(zipcode)
 
     response = get_response(url)
     if not response:
@@ -97,8 +97,8 @@ def get_listings_for_zip(zipcode, filter='newest', limit=10):
             elif list_card_types[key] == 'New Construction':
                 logging.warning(f'Address: {address_string} / Ignoring New Construction')
         except Exception as e:
-            logging.error(f'{address_string} / {e}')
-            logging.error(traceback.format_exc())
+            logging.warning(f'{address_string} / {e}')
+            # logging.warning(traceback.format_exc())
 
         if key == limit:
             break
