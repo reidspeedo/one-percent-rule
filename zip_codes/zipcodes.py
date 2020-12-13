@@ -3,7 +3,7 @@ import logging
 
 logging.basicConfig(filename='app.py', filemode='w')
 
-path = '/Users/reidrelatores/PycharmProjects/zillow/'
+path = '//'
 filename = 'uszips.csv'
 
 with open(filename, newline='') as f:

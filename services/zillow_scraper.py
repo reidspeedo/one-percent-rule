@@ -4,9 +4,13 @@ from pyzillow.pyzillow import ZillowWrapper, GetDeepSearchResults
 import json
 import os
 import logging
-from zip_list import zip_list
+import traceback
 
-logging.basicConfig(filename='app.log', filemode='w', format='%(levelname)s - %(message)s')
+from zip_codes.zip_list import zip_list
+from navigatefilter import navigatefilter
+
+
+logging.basicConfig(filename='../app.log', filemode='w', format='%(levelname)s - %(message)s')
 zillow_data = ZillowWrapper(os.environ['ZILLOW_API_KEY'])
 
 def get_headers():
@@ -27,12 +31,13 @@ def create_url(zipcode):
             state_url = item[2].lower()
         else:
             continue
-    url = f'https://www.zillow.com/{city_url}-{state_url}-{zipcode}/?searchQueryState=%7B%22pagination%22%3A%7B%7D%2C%22mapBounds%22%3A%7B%22west%22%3A-72.1198548988988%2C%22east%22%3A-72.03041932150622%2C%22south%22%3A42.57401567418149%2C%22north%22%3A42.622602193357395%7D%2C%22regionSelection%22%3A%5B%7B%22regionId%22%3A58364%2C%22regionType%22%3A7%7D%5D%2C%22isMapVisible%22%3Atrue%2C%22filterState%22%3A%7B%22doz%22%3A%7B%22value%22%3A%227%22%7D%2C%22nc%22%3A%7B%22value%22%3Afalse%7D%2C%22fore%22%3A%7B%22value%22%3Afalse%7D%2C%22cmsn%22%3A%7B%22value%22%3Afalse%7D%2C%22auc%22%3A%7B%22value%22%3Afalse%7D%2C%22pmf%22%3A%7B%22value%22%3Afalse%7D%2C%22pf%22%3A%7B%22value%22%3Afalse%7D%2C%22ah%22%3A%7B%22value%22%3Atrue%7D%7D%2C%22isListVisible%22%3Atrue%2C%22mapZoom%22%3A14%7D'
+    url = f'https://www.zillow.com/homes/{zipcode}_rb/'
+    print(url)
     return url
 
 def save_to_response_file(response):
     # saving response to `response.html`
-    with open("response.html", 'w') as fp:
+    with open("../response.html", 'w') as fp:
         fp.write(response.text)
 
 def get_response(url):
@@ -50,8 +55,8 @@ def get_response(url):
             return response
     return None
 
-def get_listings_for_zip(zipcode, filter='newest', limit=5):
-    url = create_url(zipcode)
+def get_listings_for_zip(zipcode, filter='newest', limit=10):
+    url = create_url(str(zipcode))
 
     response = get_response(url)
     if not response:
@@ -61,6 +66,8 @@ def get_listings_for_zip(zipcode, filter='newest', limit=5):
     search_results = parser.xpath("//div[@id='grid-search-results']//script[1]//text()")
     list_prices = parser.xpath("//div[@id='grid-search-results']//article//div[@class='list-card-price']/text()")
     list_card_types = parser.xpath("//div[@id='grid-search-results']//article//div[@class='list-card-type']/text()")
+    prop_urls = parser.xpath("//div[@id='grid-search-results']//article//a/@href")
+
     properties_list = []
 
     for key, items in enumerate(search_results):
@@ -77,11 +84,13 @@ def get_listings_for_zip(zipcode, filter='newest', limit=5):
                 api_result = GetDeepSearchResults(deep_search_response)
                 rentzestimate_amount = api_result.rentzestimate_amount
                 list_price = str(list_prices[key])
+                prop_url = str(prop_urls[key])
 
                 properties = {'address': streetAddress,
                               'postal_code': postalCode,
                               'price': list_price,
-                              'rent_estimate': rentzestimate_amount}
+                              'rent_estimate': rentzestimate_amount,
+                              'url': prop_url}
 
                 properties_list.append(properties)
                 #print(properties)
@@ -89,6 +98,7 @@ def get_listings_for_zip(zipcode, filter='newest', limit=5):
                 logging.warning(f'Address: {address_string} / Ignoring New Construction')
         except Exception as e:
             logging.error(f'{address_string} / {e}')
+            logging.error(traceback.format_exc())
 
         if key == limit:
             break
@@ -105,6 +115,7 @@ def one_percent_rule(full_properties_list):
                 one_percent_rule_dict['satisfy_one_percent'] = True
             else:
                 one_percent_rule_dict['satisfy_one_percent'] = False
+
         except Exception as e:
             one_percent_rule_dict['percent'] = 0
             one_percent_rule_dict['satisfy_one_percent'] = False
@@ -113,8 +124,19 @@ def one_percent_rule(full_properties_list):
 
     return full_properties_list
 
-if __name__ == "__main__":
-    scrapedata = get_listings_for_zip('45140')
-    satisfied_props = one_percent_rule(scrapedata)
 
-    print(str(satisfied_props))
+
+if __name__ == "__main__":
+    navigatefilter.initialize_filter()
+
+    zip_list = ['45140','98109']
+    one_percent_properties = {}
+
+    for zip in zip_list:
+        scrapedata = get_listings_for_zip(zip)
+        satisfied_props = one_percent_rule(scrapedata)
+        for i in satisfied_props:
+            if i['one_percent_rule']['satisfy_one_percent']:
+                print(i['url'],i['one_percent_rule'])
+
+        print(str(satisfied_props))
